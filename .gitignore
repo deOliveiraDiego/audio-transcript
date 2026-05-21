@@ -1,3 +1,8 @@
+# Secrets — never commit env files
+.env
+.env.local
+.env.*.local
+
 # Runtime data — uploads, normalized audio, chunks, transcripts
 data/
 
