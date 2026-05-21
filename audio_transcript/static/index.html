@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>audio-transcript</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-weight: 600; }
+    .drop {
+      border: 2px dashed #999; border-radius: 12px; padding: 4rem 2rem;
+      text-align: center; cursor: pointer; transition: background 0.15s;
+    }
+    .drop.dragover { background: #f0f7ff; border-color: #4a90e2; }
+    .progress { margin-top: 2rem; }
+    .bar { height: 12px; background: #eee; border-radius: 6px; overflow: hidden; }
+    .bar > div { height: 100%; background: #4a90e2; transition: width 0.2s; }
+    .stage { margin-top: 0.5rem; color: #555; font-size: 0.9rem; }
+    .error { background: #fde7e7; border: 1px solid #e74c3c; padding: 1rem; border-radius: 8px; color: #b00020; }
+    button { font: inherit; padding: 0.75rem 1.5rem; border-radius: 8px; border: 0; background: #4a90e2; color: white; cursor: pointer; }
+    pre { background: #f6f6f6; padding: 1rem; border-radius: 6px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Transcrição de áudio</h1>
+
+  <div id="drop" class="drop">
+    Arraste um arquivo de áudio aqui ou clique para escolher.
+    <input id="file" type="file" accept="audio/*" hidden />
+  </div>
+
+  <div id="progress" class="progress hidden">
+    <div class="bar"><div id="fill" style="width: 0%"></div></div>
+    <div id="stage" class="stage">Iniciando…</div>
+  </div>
+
+  <div id="done" class="hidden">
+    <h2>Pronto!</h2>
+    <a id="download" href="#"><button>Baixar transcrição (.txt)</button></a>
+    <h3>Prévia</h3>
+    <pre id="preview"></pre>
+    <p><a href="/">Nova transcrição</a></p>
+  </div>
+
+  <div id="error" class="error hidden"></div>
+
+<script>
+const drop = document.getElementById("drop");
+const fileInput = document.getElementById("file");
+const progress = document.getElementById("progress");
+const fill = document.getElementById("fill");
+const stage = document.getElementById("stage");
+const doneBox = document.getElementById("done");
+const errorBox = document.getElementById("error");
+
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("dragover"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("dragover"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("dragover");
+  if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length) upload(fileInput.files[0]);
+});
+
+async function upload(file) {
+  drop.classList.add("hidden");
+  progress.classList.remove("hidden");
+  stage.textContent = "Enviando arquivo…";
+
+  const form = new FormData();
+  form.append("file", file);
+  let res;
+  try {
+    res = await fetch("/upload", { method: "POST", body: form });
+  } catch (err) {
+    return showError("Falha ao enviar o arquivo: " + err.message);
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    return showError("Upload falhou (" + res.status + "): " + body);
+  }
+  const { job_id } = await res.json();
+  watch(job_id);
+}
+
+function watch(jobId) {
+  const es = new EventSource(`/jobs/${jobId}/stream`);
+  es.addEventListener("progress", (e) => {
+    const d = JSON.parse(e.data);
+    if (typeof d.processed === "number" && typeof d.total === "number" && d.total > 0) {
+      fill.style.width = ((d.processed / d.total) * 100).toFixed(1) + "%";
+      stage.textContent = `Transcrevendo ${d.processed} de ${d.total} trechos…`;
+    } else if (d.stage) {
+      const labels = {
+        normalizing: "Normalizando áudio…",
+        chunking: "Dividindo em trechos…",
+        transcribing: "Transcrevendo…",
+        assembling: "Montando texto final…",
+      };
+      stage.textContent = labels[d.stage] || d.stage;
+    }
+  });
+  es.addEventListener("done", (e) => {
+    es.close();
+    const { job_id } = JSON.parse(e.data);
+    showDone(job_id);
+  });
+  es.addEventListener("error", (e) => {
+    es.close();
+    let msg = "Erro desconhecido.";
+    try { msg = JSON.parse(e.data).message; } catch (_) {}
+    showError(msg);
+  });
+}
+
+async function showDone(jobId) {
+  progress.classList.add("hidden");
+  doneBox.classList.remove("hidden");
+  document.getElementById("download").href = `/jobs/${jobId}/result`;
+  const text = await fetch(`/jobs/${jobId}/result`).then((r) => r.text());
+  document.getElementById("preview").textContent = text.slice(0, 500);
+}
+
+function showError(msg) {
+  progress.classList.add("hidden");
+  errorBox.classList.remove("hidden");
+  errorBox.textContent = msg;
+}
+</script>
+</body>
+</html>
