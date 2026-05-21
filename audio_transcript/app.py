@@ -1,19 +1,57 @@
-"""FastAPI app: upload, result download, and (in Task 8) SSE streaming."""
+"""FastAPI app: upload, SSE progress, result download."""
 from __future__ import annotations
 
+import asyncio
+import json
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sse_starlette.sse import EventSourceResponse
 
 from audio_transcript import config
 from audio_transcript.job import JobState, JobStatus
-
-app = FastAPI(title="audio-transcript")
+from audio_transcript.pipeline import run_pipeline
+from audio_transcript.transcriber import Transcriber
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+class JobBroker:
+    """Per-job in-memory pub/sub for SSE clients."""
+
+    def __init__(self) -> None:
+        self._queues: dict[str, list[asyncio.Queue]] = {}
+
+    def subscribe(self, job_id: str) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue()
+        self._queues.setdefault(job_id, []).append(q)
+        return q
+
+    def unsubscribe(self, job_id: str, q: asyncio.Queue) -> None:
+        if job_id in self._queues:
+            self._queues[job_id] = [x for x in self._queues[job_id] if x is not q]
+            if not self._queues[job_id]:
+                del self._queues[job_id]
+
+    async def publish(self, job_id: str, event: dict) -> None:
+        for q in self._queues.get(job_id, []):
+            await q.put(event)
+
+
+broker = JobBroker()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.transcriber = Transcriber.from_default_config()
+    yield
+
+
+app = FastAPI(title="audio-transcript", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
@@ -50,13 +88,26 @@ async def upload(file: UploadFile = File(...)) -> dict:
                 )
             out.write(chunk)
 
-    job = JobState(
+    JobState(
         id=job_id,
         status=JobStatus.PENDING,
         source_path=source_path,
         stage="pending",
+    ).save(job_dir)
+
+    async def _publish(event: dict) -> None:
+        await broker.publish(job_id, event)
+
+    asyncio.create_task(
+        run_pipeline(
+            job_dir=job_dir,
+            transcriber=app.state.transcriber,
+            publish=_publish,
+            silence_noise_db=config.SILENCE_NOISE_DB,
+            silence_min_duration_s=config.SILENCE_MIN_DURATION_S,
+            max_chunk_s=config.MAX_CHUNK_SECONDS,
+        )
     )
-    job.save(job_dir)
 
     return {"job_id": job_id}
 
@@ -75,6 +126,47 @@ async def get_job(job_id: str) -> dict:
         "processed_chunks": job.processed_chunks,
         "error_message": job.error_message,
     }
+
+
+@app.get("/jobs/{job_id}/stream")
+async def stream(job_id: str) -> EventSourceResponse:
+    job_dir = config.UPLOADS_DIR / job_id
+    if not (job_dir / JobState.JSON_FILENAME).exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    queue = broker.subscribe(job_id)
+
+    async def event_generator():
+        job = JobState.load(job_dir)
+        yield {
+            "event": "progress",
+            "data": json.dumps({
+                "stage": job.stage,
+                "processed": job.processed_chunks,
+                "total": job.total_chunks,
+                "status": job.status.value,
+            }),
+        }
+        if job.status == JobStatus.DONE:
+            yield {"event": "done", "data": json.dumps({"job_id": job_id})}
+            return
+        if job.status == JobStatus.FAILED:
+            yield {
+                "event": "error",
+                "data": json.dumps({"message": job.error_message or "unknown"}),
+            }
+            return
+
+        try:
+            while True:
+                event = await queue.get()
+                yield {"event": event["event"], "data": json.dumps(event["data"])}
+                if event["event"] in {"done", "error"}:
+                    return
+        finally:
+            broker.unsubscribe(job_id, queue)
+
+    return EventSourceResponse(event_generator())
 
 
 @app.get("/jobs/{job_id}/result")
