@@ -165,6 +165,64 @@
       color: var(--error-fg);
     }
     .hidden { display: none; }
+
+    /* History */
+    .history { margin-top: 3rem; }
+    .history h2 {
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .history ul { list-style: none; padding: 0; margin: 0; }
+    .history-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 0.6rem;
+      background: var(--bg);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .history-item:hover { border-color: var(--accent); background: var(--accent-bg); }
+    .history-item.open { background: var(--accent-bg); border-color: var(--accent); }
+    .history-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      cursor: pointer;
+    }
+    .history-name { font-weight: 500; }
+    .history-date { color: var(--muted); font-size: 0.88rem; white-space: nowrap; }
+    .history-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+      flex-wrap: wrap;
+    }
+    .history-actions button {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.85rem;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .history-actions button:hover { background: var(--accent); color: white; filter: none; }
+    .history-actions button.danger { color: var(--error-fg); border-color: var(--error-border); }
+    .history-actions button.danger:hover { background: var(--error-fg); color: white; }
+    .history-actions button.copied { background: var(--done); color: white; border-color: var(--done); }
+    .history-content {
+      margin-top: 0.85rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--border);
+      max-height: 320px;
+      overflow-y: auto;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    .history-content p { margin: 0 0 0.9rem; }
+    .history-content p:last-child { margin-bottom: 0; }
   </style>
 </head>
 <body>
@@ -208,6 +266,11 @@
   </div>
 
   <div id="error" class="error hidden"></div>
+
+  <section id="history" class="history hidden">
+    <h2>Trabalhos recentes (<span id="historyCount">0</span>)</h2>
+    <ul id="historyList"></ul>
+  </section>
 
 <script>
 const STAGES = ["upload", "normalizing", "chunking", "transcribing", "assembling"];
@@ -397,6 +460,137 @@ function showError(msg) {
   errorBox.classList.remove("hidden");
   errorBox.textContent = msg;
 }
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function loadHistory() {
+  let jobs;
+  try {
+    const res = await fetch("/jobs");
+    if (!res.ok) return;
+    jobs = await res.json();
+  } catch (_) {
+    return;
+  }
+  const section = document.getElementById("history");
+  const list = document.getElementById("historyList");
+  const counter = document.getElementById("historyCount");
+  if (!jobs || jobs.length === 0) {
+    section.classList.add("hidden");
+    return;
+  }
+  counter.textContent = jobs.length;
+  list.innerHTML = "";
+  jobs.forEach((job) => list.appendChild(renderHistoryItem(job)));
+  section.classList.remove("hidden");
+}
+
+function renderHistoryItem(job) {
+  const li = document.createElement("li");
+  li.className = "history-item";
+  li.dataset.jobId = job.id;
+
+  const row = document.createElement("div");
+  row.className = "history-row";
+  const name = document.createElement("span");
+  name.className = "history-name";
+  name.textContent = job.filename;
+  const date = document.createElement("span");
+  date.className = "history-date";
+  date.textContent = formatDate(job.modified);
+  row.appendChild(name);
+  row.appendChild(date);
+  li.appendChild(row);
+
+  const actions = document.createElement("div");
+  actions.className = "history-actions";
+
+  const downloadBtn = document.createElement("button");
+  downloadBtn.textContent = "↓ Baixar";
+  downloadBtn.onclick = (e) => {
+    e.stopPropagation();
+    window.location.href = `/jobs/${job.id}/result`;
+  };
+
+  const copyBtn = document.createElement("button");
+  copyBtn.textContent = "⧉ Copiar";
+  copyBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      const text = await fetch(`/jobs/${job.id}/result`).then((r) => r.text());
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = "✓ Copiado!";
+      copyBtn.classList.add("copied");
+      setTimeout(() => {
+        copyBtn.textContent = "⧉ Copiar";
+        copyBtn.classList.remove("copied");
+      }, 1800);
+    } catch (_) {
+      copyBtn.textContent = "Falhou";
+      setTimeout(() => { copyBtn.textContent = "⧉ Copiar"; }, 2000);
+    }
+  };
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "danger";
+  delBtn.textContent = "× Apagar";
+  delBtn.onclick = async (e) => {
+    e.stopPropagation();
+    if (!confirm(`Apagar transcrição de ${job.filename}? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const res = await fetch(`/jobs/${job.id}`, { method: "DELETE" });
+      if (res.ok || res.status === 404) {
+        li.remove();
+        const remaining = document.querySelectorAll("#historyList .history-item").length;
+        document.getElementById("historyCount").textContent = remaining;
+        if (remaining === 0) document.getElementById("history").classList.add("hidden");
+      } else {
+        alert(`Falha ao apagar (HTTP ${res.status})`);
+      }
+    } catch (err) {
+      alert("Falha ao apagar: " + err.message);
+    }
+  };
+
+  actions.appendChild(downloadBtn);
+  actions.appendChild(copyBtn);
+  actions.appendChild(delBtn);
+  li.appendChild(actions);
+
+  let expanded = false;
+  row.onclick = async () => {
+    if (expanded) {
+      const content = li.querySelector(".history-content");
+      if (content) content.remove();
+      li.classList.remove("open");
+      expanded = false;
+      return;
+    }
+    try {
+      const text = await fetch(`/jobs/${job.id}/result`).then((r) => r.text());
+      const content = document.createElement("div");
+      content.className = "history-content";
+      text.split("\n\n").forEach((para) => {
+        const p = document.createElement("p");
+        p.textContent = para;
+        content.appendChild(p);
+      });
+      li.appendChild(content);
+      li.classList.add("open");
+      expanded = true;
+    } catch (err) {
+      alert("Falha ao carregar transcrição: " + err.message);
+    }
+  };
+
+  return li;
+}
+
+loadHistory();
 </script>
 </body>
 </html>

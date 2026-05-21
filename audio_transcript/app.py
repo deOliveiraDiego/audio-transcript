@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
@@ -111,6 +113,43 @@ async def upload(file: UploadFile = File(...)) -> dict:
     )
 
     return {"job_id": job_id}
+
+
+@app.get("/jobs")
+async def list_jobs() -> list[dict]:
+    if not config.UPLOADS_DIR.exists():
+        return []
+    entries: list[tuple[float, dict]] = []
+    for job_dir in config.UPLOADS_DIR.iterdir():
+        if not job_dir.is_dir():
+            continue
+        if not (job_dir / JobState.JSON_FILENAME).exists():
+            continue
+        if not (job_dir / "transcript.txt").exists():
+            continue
+        try:
+            job = JobState.load(job_dir)
+        except Exception:
+            continue
+        if job.status != JobStatus.DONE:
+            continue
+        mtime = job_dir.stat().st_mtime
+        entries.append((mtime, {
+            "id": job.id,
+            "filename": job.source_path.name,
+            "modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
+        }))
+    entries.sort(key=lambda e: e[0], reverse=True)
+    return [e[1] for e in entries]
+
+
+@app.delete("/jobs/{job_id}")
+async def delete_job(job_id: str) -> Response:
+    job_dir = config.UPLOADS_DIR / job_id
+    if not (job_dir / JobState.JSON_FILENAME).exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+    shutil.rmtree(job_dir)
+    return Response(status_code=204)
 
 
 @app.get("/jobs/{job_id}")
