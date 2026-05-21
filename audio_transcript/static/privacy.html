@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Política de Privacidade — audio-transcript</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #6b6b6b;
+      --border: #d9d9d9;
+      --accent: #4a90e2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 760px;
+      margin: 3rem auto;
+      padding: 0 1rem;
+      color: var(--fg);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+    h1 { font-weight: 600; margin-top: 0; }
+    h2 { font-weight: 600; margin-top: 2rem; }
+    a { color: var(--accent); }
+    a:hover { text-decoration: underline; }
+    .back { display: inline-block; margin-bottom: 1.5rem; color: var(--muted); text-decoration: none; }
+    .back:hover { color: var(--accent); }
+    .updated { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    ul { padding-left: 1.4rem; }
+    li { margin-bottom: 0.35rem; }
+  </style>
+</head>
+<body>
+  <a href="/" class="back">← Voltar</a>
+
+  <h1>Política de Privacidade</h1>
+  <p class="updated">Última atualização: 21 de maio de 2026</p>
+
+  <p>Esta política descreve como o serviço <strong>audio-transcript</strong> trata os dados gerados pelo uso da página. O serviço é operado por Diego de Oliveira, no Brasil, e segue a Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018).</p>
+
+  <h2>1. Dados coletados</h2>
+  <ul>
+    <li><strong>Arquivos de áudio</strong> que você envia para transcrição. Os arquivos são processados localmente, no mesmo servidor que hospeda o site, por um modelo de reconhecimento de fala (Parakeet TDT 0.6B v3, executado via sherpa-onnx). Nenhum áudio é enviado para APIs externas de transcrição.</li>
+    <li><strong>Arquivos intermediários e finais</strong> gerados pela transcrição (versão normalizada do áudio em WAV, recortes por trecho, textos por trecho e a transcrição final), armazenados em uma pasta com identificador único no servidor.</li>
+    <li><strong>Endereço IP</strong> e dados básicos de requisição (user-agent, horário, caminho acessado), registrados pelos logs do servidor web (proxy reverso).</li>
+    <li><strong>Dados do hCaptcha</strong>: para bloquear robôs no formulário de envio, usamos o hCaptcha, que pode coletar informações do navegador (IP, características do dispositivo, interações com a página).</li>
+    <li><strong>Cookies do Google AdSense</strong>: o site exibe anúncios do AdSense, que utiliza cookies para personalização e medição de anúncios.</li>
+  </ul>
+  <p>Não há cadastro, login nem identificação de usuário. Qualquer pessoa com a URL pode usar o serviço.</p>
+
+  <h2>2. Por quanto tempo guardamos</h2>
+  <ul>
+    <li><strong>Arquivos de áudio, intermediários e transcrições</strong>: apagados automaticamente após <strong>7 dias</strong> (valor padrão; pode ser ajustado pela variável <code>AUDIO_TRANSCRIPT_RETENTION_DAYS</code>). Você também pode apagar manualmente a qualquer momento pelo botão "Apagar" na lista de trabalhos recentes.</li>
+    <li><strong>Logs do servidor</strong> (incluindo IP): mantidos por até <strong>30 dias</strong> para diagnóstico e segurança, depois descartados.</li>
+    <li><strong>Cookies do AdSense e hCaptcha</strong>: tempo de retenção definido pelas respectivas políticas dos fornecedores.</li>
+  </ul>
+
+  <h2>3. Compartilhamento com terceiros</h2>
+  <p>O conteúdo do seu áudio e a transcrição <strong>não</strong> são compartilhados com terceiros — a transcrição roda 100% no nosso servidor.</p>
+  <p>Há, no entanto, dois serviços de terceiros embutidos na página:</p>
+  <ul>
+    <li><strong>hCaptcha</strong> (proteção contra robôs no upload). Política de privacidade: <a href="https://www.hcaptcha.com/privacy" target="_blank" rel="noopener">https://www.hcaptcha.com/privacy</a>.</li>
+    <li><strong>Google AdSense</strong> (anúncios). Como o Google usa cookies em publicidade: <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">https://policies.google.com/technologies/ads</a>.</li>
+  </ul>
+
+  <h2>4. Cookies</h2>
+  <p>O próprio site não cria cookies de identificação. Os cookies presentes vêm dos componentes de terceiros listados acima (hCaptcha e Google AdSense), usados para detectar robôs e personalizar/medir anúncios. Você pode desabilitar cookies nas configurações do seu navegador; partes do site podem deixar de funcionar.</p>
+
+  <h2>5. Seus direitos (LGPD)</h2>
+  <p>Sob a LGPD, você tem direito a:</p>
+  <ul>
+    <li>Confirmar se há tratamento de dados seus e acessá-los;</li>
+    <li>Corrigir dados incompletos, inexatos ou desatualizados;</li>
+    <li>Solicitar a exclusão de dados (para áudios enviados, você pode apagar diretamente pela página; para logs, basta solicitar pelo e-mail abaixo);</li>
+    <li>Solicitar informações sobre uso compartilhado dos dados;</li>
+    <li>Revogar consentimento.</li>
+  </ul>
+  <p>Para exercer qualquer um desses direitos, entre em contato pelo e-mail abaixo.</p>
+
+  <h2>6. Segurança</h2>
+  <p>O acesso ao servidor é restrito ao operador. A conexão com o site é feita por HTTPS. Ainda assim, nenhum serviço na internet é totalmente imune a riscos — recomenda-se não enviar áudios com informações sensíveis se você não estiver confortável com essa possibilidade.</p>
+
+  <h2>7. Contato</h2>
+  <p>Dúvidas, pedidos de exclusão ou qualquer outra solicitação relacionada a esta política:</p>
+  <p><strong>Diego de Oliveira</strong><br />
+  E-mail: <a href="mailto:diego.deoliveira@daltonlab.ai">diego.deoliveira@daltonlab.ai</a></p>
+
+  <h2>8. Alterações</h2>
+  <p>Esta política pode ser atualizada para refletir mudanças no serviço ou na legislação. Recomenda-se conferir esta página periodicamente. A data no topo indica a última revisão.</p>
+</body>
+</html>
