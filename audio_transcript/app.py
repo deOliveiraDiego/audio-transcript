@@ -3,16 +3,65 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
+import time
 import uuid
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import httpx
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
+
+log = logging.getLogger(__name__)
+
+UPLOAD_RATE_LIMIT = 5
+UPLOAD_RATE_WINDOW_SEC = 3600
+_upload_history: dict[str, deque] = defaultdict(deque)
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_upload_rate_limit(ip: str) -> bool:
+    now = time.monotonic()
+    bucket = _upload_history[ip]
+    while bucket and bucket[0] < now - UPLOAD_RATE_WINDOW_SEC:
+        bucket.popleft()
+    if len(bucket) >= UPLOAD_RATE_LIMIT:
+        return False
+    bucket.append(now)
+    return True
+
+
+async def _verify_captcha(token: str, ip: str) -> bool:
+    if not config.HCAPTCHA_SECRET:
+        return True
+    if not token:
+        return False
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            resp = await client.post(
+                "https://api.hcaptcha.com/siteverify",
+                data={
+                    "secret": config.HCAPTCHA_SECRET,
+                    "response": token,
+                    "remoteip": ip,
+                },
+            )
+            return bool(resp.json().get("success"))
+        except Exception:
+            log.warning("captcha verify failed for ip=%s", ip, exc_info=True)
+            return False
 
 from audio_transcript import config
 from audio_transcript.cleanup import run_periodic_cleanup
@@ -90,6 +139,15 @@ def _ad_slot() -> str:
     )
 
 
+def _hcaptcha_widget() -> str:
+    if not config.HCAPTCHA_SITEKEY:
+        return ""
+    return (
+        f'<div class="h-captcha" data-sitekey="{config.HCAPTCHA_SITEKEY}"></div>'
+        '<script src="https://js.hcaptcha.com/1/api.js" async defer></script>'
+    )
+
+
 def _render_template(path: Path) -> str:
     html = path.read_text()
     return (
@@ -97,6 +155,7 @@ def _render_template(path: Path) -> str:
             .replace("{{ADSENSE_SLOT_TOP}}", _ad_slot())
             .replace("{{ADSENSE_SLOT_BOTTOM}}", _ad_slot())
             .replace("{{ADSENSE_CLIENT_ID}}", config.ADSENSE_CLIENT_ID)
+            .replace("{{HCAPTCHA_WIDGET}}", _hcaptcha_widget())
             .replace("{{HCAPTCHA_SITEKEY}}", config.HCAPTCHA_SITEKEY)
     )
 
@@ -120,7 +179,23 @@ async def terms() -> HTMLResponse:
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)) -> dict:
+async def upload(
+    request: Request,
+    file: UploadFile = File(...),
+    captcha_token: str = Form("", alias="h-captcha-response"),
+) -> dict:
+    ip = _client_ip(request)
+    if not _check_upload_rate_limit(ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Muitos uploads recentes. Tente novamente em 1 hora.",
+        )
+    if not await _verify_captcha(captcha_token, ip):
+        raise HTTPException(
+            status_code=403,
+            detail="Captcha inválido. Recarregue a página e tente de novo.",
+        )
+
     job_id = str(uuid.uuid4())
     job_dir = config.UPLOADS_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)

@@ -264,6 +264,10 @@
     <input id="file" type="file" accept="audio/*" hidden />
   </div>
 
+  <div id="captcha-wrapper" style="margin-top: 1rem; display: flex; justify-content: center;">
+    {{HCAPTCHA_WIDGET}}
+  </div>
+
   <div id="progress" class="hidden">
     <ul class="timeline" id="timeline">
       <li data-stage="upload"><span class="icon"></span><span>Enviando arquivo</span></li>
@@ -395,7 +399,19 @@ async function pollPartial(jobId, processed) {
 }
 
 async function upload(file) {
+  const captchaEl = document.querySelector(".h-captcha");
+  let captchaToken = "";
+  if (captchaEl && typeof hcaptcha !== "undefined") {
+    captchaToken = hcaptcha.getResponse();
+    if (!captchaToken) {
+      alert("Resolva o captcha antes de enviar o arquivo.");
+      return;
+    }
+  }
+
   drop.classList.add("hidden");
+  const captchaWrapper = document.getElementById("captcha-wrapper");
+  if (captchaWrapper) captchaWrapper.classList.add("hidden");
   progress.classList.remove("hidden");
   setStage("upload");
   counter.textContent = "enviando…";
@@ -403,6 +419,8 @@ async function upload(file) {
 
   const form = new FormData();
   form.append("file", file);
+  if (captchaToken) form.append("h-captcha-response", captchaToken);
+
   let res;
   try {
     res = await fetch("/upload", { method: "POST", body: form });
@@ -410,8 +428,9 @@ async function upload(file) {
     return showError("Falha ao enviar o arquivo: " + err.message);
   }
   if (!res.ok) {
-    const body = await res.text();
-    return showError("Upload falhou (" + res.status + "): " + body);
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (_) {}
+    return showError("Upload falhou (" + res.status + "): " + detail);
   }
   const { job_id } = await res.json();
   watch(job_id);
