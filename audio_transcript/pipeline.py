@@ -71,6 +71,8 @@ async def run_pipeline(
             boundaries.append(boundaries[-1] + info.frames / info.samplerate)
 
         texts: list[str | None] = [None] * len(chunks)
+        chunk_texts_dir = job_dir / "chunk_texts"
+        chunk_texts_dir.mkdir(parents=True, exist_ok=True)
         semaphore = asyncio.Semaphore(max(1, parallelism))
         progress_lock = asyncio.Lock()
 
@@ -84,6 +86,9 @@ async def run_pipeline(
                     end = _format_time(boundaries[i + 1])
                     text = f"[TRECHO NÃO TRANSCRITO: {start}–{end}]"
                 texts[i] = text
+                (chunk_texts_dir / f"chunk_{i + 1:03d}.txt").write_text(
+                    text, encoding="utf-8"
+                )
                 async with progress_lock:
                     job.processed_chunks += 1
                     job.save(job_dir)

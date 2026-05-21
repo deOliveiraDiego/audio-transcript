@@ -170,6 +170,20 @@ async def stream(job_id: str) -> EventSourceResponse:
     return EventSourceResponse(event_generator())
 
 
+@app.get("/jobs/{job_id}/transcript-partial")
+async def get_partial(job_id: str) -> dict:
+    job_dir = config.UPLOADS_DIR / job_id
+    if not (job_dir / JobState.JSON_FILENAME).exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+    texts_dir = job_dir / "chunk_texts"
+    if not texts_dir.exists():
+        return {"text": "", "processed": 0}
+    from audio_transcript.assembler import combine
+    paths = sorted(texts_dir.glob("chunk_*.txt"))
+    texts = [p.read_text(encoding="utf-8") for p in paths]
+    return {"text": combine(texts), "processed": len(texts)}
+
+
 @app.get("/jobs/{job_id}/result")
 async def get_result(job_id: str) -> FileResponse:
     job_dir = config.UPLOADS_DIR / job_id

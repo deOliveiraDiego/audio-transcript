@@ -4,20 +4,154 @@
   <meta charset="utf-8" />
   <title>audio-transcript</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
-    h1 { font-weight: 600; }
-    .drop {
-      border: 2px dashed #999; border-radius: 12px; padding: 4rem 2rem;
-      text-align: center; cursor: pointer; transition: background 0.15s;
+    :root {
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #6b6b6b;
+      --border: #d9d9d9;
+      --accent: #4a90e2;
+      --accent-bg: #f0f7ff;
+      --done: #2ea44f;
+      --error-bg: #fde7e7;
+      --error-fg: #b00020;
+      --error-border: #e74c3c;
+      --code-bg: #f6f6f6;
     }
-    .drop.dragover { background: #f0f7ff; border-color: #4a90e2; }
-    .progress { margin-top: 2rem; }
-    .bar { height: 12px; background: #eee; border-radius: 6px; overflow: hidden; }
-    .bar > div { height: 100%; background: #4a90e2; transition: width 0.2s; }
-    .stage { margin-top: 0.5rem; color: #555; font-size: 0.9rem; }
-    .error { background: #fde7e7; border: 1px solid #e74c3c; padding: 1rem; border-radius: 8px; color: #b00020; }
-    button { font: inherit; padding: 0.75rem 1.5rem; border-radius: 8px; border: 0; background: #4a90e2; color: white; cursor: pointer; }
-    pre { background: #f6f6f6; padding: 1rem; border-radius: 6px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 760px;
+      margin: 3rem auto;
+      padding: 0 1rem;
+      color: var(--fg);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    h1 { font-weight: 600; margin-top: 0; }
+    h2, h3 { font-weight: 600; }
+    .drop {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 4rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .drop:hover, .drop.dragover {
+      background: var(--accent-bg);
+      border-color: var(--accent);
+      color: var(--fg);
+    }
+
+    .timeline { list-style: none; padding: 0; margin: 1.5rem 0; }
+    .timeline li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      color: var(--muted);
+      transition: color 0.2s;
+    }
+    .timeline li.done { color: var(--fg); }
+    .timeline li.active { color: var(--fg); font-weight: 600; }
+    .timeline .icon {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .timeline li .icon::before { content: "○"; color: var(--border); }
+    .timeline li.done .icon::before { content: "✓"; color: var(--done); }
+    .timeline li.active .icon::before {
+      content: "";
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--accent);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .bar {
+      height: 10px;
+      background: #eee;
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 0.5rem 0 0.25rem;
+      position: relative;
+    }
+    .bar > div {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+    .bar.active > div::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: shimmer 1.4s linear infinite;
+    }
+    @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .preview {
+      margin-top: 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      background: var(--code-bg);
+      max-height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: system-ui, sans-serif;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    .preview h3 { margin: 0 0 0.5rem; font-size: 0.85rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+    .preview p { margin: 0 0 0.9rem; }
+    .preview p:last-child { margin-bottom: 0; }
+    .preview .empty { color: var(--muted); font-style: italic; }
+
+    button {
+      font: inherit;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      border: 0;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover { filter: brightness(1.05); }
+    .actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; }
+    .actions a { color: var(--muted); text-decoration: none; }
+    .actions a:hover { color: var(--accent); text-decoration: underline; }
+
+    .error {
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      padding: 1rem;
+      border-radius: 8px;
+      color: var(--error-fg);
+    }
     .hidden { display: none; }
   </style>
 </head>
@@ -29,29 +163,55 @@
     <input id="file" type="file" accept="audio/*" hidden />
   </div>
 
-  <div id="progress" class="progress hidden">
-    <div class="bar"><div id="fill" style="width: 0%"></div></div>
-    <div id="stage" class="stage">Iniciando…</div>
+  <div id="progress" class="hidden">
+    <ul class="timeline" id="timeline">
+      <li data-stage="upload"><span class="icon"></span><span>Enviando arquivo</span></li>
+      <li data-stage="normalizing"><span class="icon"></span><span>Normalizando áudio</span></li>
+      <li data-stage="chunking"><span class="icon"></span><span>Dividindo em trechos</span></li>
+      <li data-stage="transcribing"><span class="icon"></span><span>Transcrevendo</span></li>
+      <li data-stage="assembling"><span class="icon"></span><span>Montando texto final</span></li>
+    </ul>
+    <div class="bar active"><div id="fill" style="width: 0%"></div></div>
+    <div class="meta">
+      <span id="counter">—</span>
+      <span id="eta">—</span>
+    </div>
+    <div class="preview" id="preview">
+      <h3>Prévia (atualiza enquanto roda)</h3>
+      <div id="previewBody" class="empty">A prévia aparece aqui assim que o primeiro trecho for transcrito…</div>
+    </div>
   </div>
 
   <div id="done" class="hidden">
     <h2>Pronto!</h2>
-    <a id="download" href="#"><button>Baixar transcrição (.txt)</button></a>
-    <h3>Prévia</h3>
-    <pre id="preview"></pre>
-    <p><a href="/">Nova transcrição</a></p>
+    <div class="actions">
+      <a id="download" href="#"><button>Baixar transcrição (.txt)</button></a>
+      <a href="/">Nova transcrição</a>
+    </div>
+    <div class="preview">
+      <h3>Transcrição completa</h3>
+      <div id="finalPreview"></div>
+    </div>
   </div>
 
   <div id="error" class="error hidden"></div>
 
 <script>
+const STAGES = ["upload", "normalizing", "chunking", "transcribing", "assembling"];
+
 const drop = document.getElementById("drop");
 const fileInput = document.getElementById("file");
 const progress = document.getElementById("progress");
 const fill = document.getElementById("fill");
-const stage = document.getElementById("stage");
+const counter = document.getElementById("counter");
+const etaLabel = document.getElementById("eta");
+const previewBody = document.getElementById("previewBody");
 const doneBox = document.getElementById("done");
 const errorBox = document.getElementById("error");
+
+let chunkTimestamps = [];
+let pollTimer = null;
+let lastPolled = -1;
 
 drop.addEventListener("click", () => fileInput.click());
 drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("dragover"); });
@@ -65,10 +225,66 @@ fileInput.addEventListener("change", () => {
   if (fileInput.files.length) upload(fileInput.files[0]);
 });
 
+function setStage(stage) {
+  const items = document.querySelectorAll(".timeline li");
+  const idx = STAGES.indexOf(stage);
+  items.forEach((li, i) => {
+    li.classList.remove("active", "done");
+    if (i < idx) li.classList.add("done");
+    else if (i === idx) li.classList.add("active");
+  });
+}
+
+function markAllDone() {
+  document.querySelectorAll(".timeline li").forEach((li) => {
+    li.classList.remove("active");
+    li.classList.add("done");
+  });
+  document.querySelector(".bar").classList.remove("active");
+}
+
+function formatEta(secondsLeft) {
+  if (secondsLeft < 60) return `~${Math.max(1, Math.round(secondsLeft))}s restantes`;
+  const m = Math.floor(secondsLeft / 60);
+  const s = Math.round(secondsLeft % 60);
+  return `~${m}min ${s.toString().padStart(2, "0")}s restantes`;
+}
+
+function updateEta(processed, total) {
+  if (chunkTimestamps.length < 2) { etaLabel.textContent = "calculando ETA…"; return; }
+  const recent = chunkTimestamps.slice(-Math.min(10, chunkTimestamps.length));
+  const span = recent[recent.length - 1] - recent[0];
+  const perChunk = span / (recent.length - 1);
+  const remaining = total - processed;
+  etaLabel.textContent = formatEta((perChunk * remaining) / 1000);
+}
+
+async function pollPartial(jobId, processed) {
+  if (processed === lastPolled) return;
+  lastPolled = processed;
+  try {
+    const res = await fetch(`/jobs/${jobId}/transcript-partial`);
+    if (!res.ok) return;
+    const { text } = await res.json();
+    if (!text) return;
+    const paras = text.split("\n\n");
+    previewBody.classList.remove("empty");
+    previewBody.innerHTML = paras.map(() => `<p></p>`).join("");
+    const ps = previewBody.querySelectorAll("p");
+    paras.forEach((p, i) => ps[i].textContent = p);
+    const wrapper = document.getElementById("preview");
+    wrapper.scrollTop = wrapper.scrollHeight;
+  } catch (err) {
+    /* preview is best-effort */
+  }
+}
+
 async function upload(file) {
   drop.classList.add("hidden");
   progress.classList.remove("hidden");
-  stage.textContent = "Enviando arquivo…";
+  setStage("upload");
+  counter.textContent = "enviando…";
+  etaLabel.textContent = "—";
 
   const form = new FormData();
   form.append("file", file);
@@ -90,30 +306,47 @@ function watch(jobId) {
   const es = new EventSource(`/jobs/${jobId}/stream`);
   es.addEventListener("progress", (e) => {
     const d = JSON.parse(e.data);
+    if (d.stage && STAGES.includes(d.stage)) setStage(d.stage);
     if (typeof d.processed === "number" && typeof d.total === "number" && d.total > 0) {
+      chunkTimestamps.push(Date.now());
       fill.style.width = ((d.processed / d.total) * 100).toFixed(1) + "%";
-      stage.textContent = `Transcrevendo ${d.processed} de ${d.total} trechos…`;
+      counter.textContent = `${d.processed} de ${d.total} trechos`;
+      updateEta(d.processed, d.total);
+      pollPartial(jobId, d.processed);
     } else if (d.stage) {
       const labels = {
         normalizing: "Normalizando áudio…",
         chunking: "Dividindo em trechos…",
-        transcribing: "Transcrevendo…",
+        transcribing: "Iniciando transcrição…",
         assembling: "Montando texto final…",
       };
-      stage.textContent = labels[d.stage] || d.stage;
+      if (labels[d.stage]) counter.textContent = labels[d.stage];
     }
   });
-  es.addEventListener("done", (e) => {
+  es.addEventListener("done", async (e) => {
     es.close();
+    if (pollTimer) clearInterval(pollTimer);
+    fill.style.width = "100%";
+    markAllDone();
     const { job_id } = JSON.parse(e.data);
-    showDone(job_id);
+    await showDone(job_id);
   });
   es.addEventListener("error", (e) => {
     es.close();
+    if (pollTimer) clearInterval(pollTimer);
     let msg = "Erro desconhecido.";
     try { msg = JSON.parse(e.data).message; } catch (_) {}
     showError(msg);
   });
+
+  pollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`/jobs/${jobId}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.processed_chunks > 0) pollPartial(jobId, j.processed_chunks);
+    } catch (_) {}
+  }, 4000);
 }
 
 async function showDone(jobId) {
@@ -121,7 +354,13 @@ async function showDone(jobId) {
   doneBox.classList.remove("hidden");
   document.getElementById("download").href = `/jobs/${jobId}/result`;
   const text = await fetch(`/jobs/${jobId}/result`).then((r) => r.text());
-  document.getElementById("preview").textContent = text.slice(0, 500);
+  const target = document.getElementById("finalPreview");
+  target.innerHTML = "";
+  text.split("\n\n").forEach((para) => {
+    const p = document.createElement("p");
+    p.textContent = para;
+    target.appendChild(p);
+  });
 }
 
 function showError(msg) {
