@@ -3,27 +3,11 @@
 Lista de melhorias deliberadamente fora do escopo do MVP. Cada item tem nota de motivação e onde encostar no código.
 
 **Prioridade sugerida para a próxima sessão:**
-1. Paralelização da inferência (2-4x speedup, ~20 linhas)
-2. UI: feedbacks visuais mais ricos
+1. UI: feedbacks visuais mais ricos
 
-## Paralelização da inferência [PRIORIDADE 1]
+## ✅ Paralelização da inferência — entregue (commit fea1f07)
 
-**Gap:** Chunks são transcritos sequencial. Num áudio de 2h, são ~90-100 chunks de ~90s cada, que rodam em ~5-7s cada na máquina do Diego (Apple Silicon). Total: ~10-12 min de transcrição.
-
-**Por que vale agora:** validado em job real (2h25min, 98 chunks). Speedup de 2-4x cortaria pra 3-5 min, deixando a ferramenta muito mais agradável de usar quinzenalmente.
-
-**Caminho:**
-- `sherpa_onnx.OfflineRecognizer.create_stream()` cria streams independentes; `decode_stream()` libera o GIL (ONNX Runtime em C++). Paralelismo via `asyncio.gather` com `asyncio.Semaphore(N)` funciona.
-- **Verificar primeiro**: rodar 2-3 chunks em paralelo no MESMO recognizer e comparar com sequencial. Se a internal state do encoder/decoder bagunçar, criar N recognizers separados (custo: ~700MB RAM por instância).
-- **Default sensato**: `N = min(4, os.cpu_count() // 2)` — usa metade dos cores, sobra pro sistema.
-
-**Onde encostar:**
-- `audio_transcript/pipeline.py:75-92` — substituir o `for i, chunk_path in enumerate(chunks):` por gather + semaphore.
-- Cuidado com ordem do output: chunks completam fora de ordem, então acumular em `texts[i] = ...` (lista pré-alocada) em vez de `texts.append(...)`.
-- Atualização de `processed_chunks` precisa ser atômica (lock).
-- Manter o placeholder `[TRECHO NÃO TRANSCRITO: ...]` no mesmo lugar que está hoje.
-
-**Esforço estimado:** 1-2h incluindo benchmark sequencial vs paralelo.
+Bench em áudio real (2h25min, 98 chunks): 11min 44s → 5min 17s, 2.22x speedup, output byte-idêntico ao sequencial. Configurável via `AUDIO_TRANSCRIPT_PARALLELISM` (default 4). Validação de thread-safety em `docs/superpowers/spike/parallel_thread_safety.py`.
 
 ---
 
