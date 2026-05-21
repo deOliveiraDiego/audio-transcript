@@ -106,6 +106,7 @@ async def upload(file: UploadFile = File(...)) -> dict:
             silence_noise_db=config.SILENCE_NOISE_DB,
             silence_min_duration_s=config.SILENCE_MIN_DURATION_S,
             max_chunk_s=config.MAX_CHUNK_SECONDS,
+            parallelism=config.TRANSCRIBE_PARALLELISM,
         )
     )
 
