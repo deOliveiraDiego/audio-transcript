@@ -33,3 +33,7 @@ MAX_CHUNK_SECONDS = float(os.environ.get("AUDIO_TRANSCRIPT_MAX_CHUNK_S", "90"))
 TRANSCRIBE_PARALLELISM = int(
     os.environ.get("AUDIO_TRANSCRIPT_PARALLELISM", "4")
 )
+
+RETENTION_DAYS = int(
+    os.environ.get("AUDIO_TRANSCRIPT_RETENTION_DAYS", "7")
+)
