@@ -37,3 +37,8 @@ TRANSCRIBE_PARALLELISM = int(
 RETENTION_DAYS = int(
     os.environ.get("AUDIO_TRANSCRIPT_RETENTION_DAYS", "7")
 )
+
+HCAPTCHA_SITEKEY = os.environ.get("HCAPTCHA_SITEKEY", "")
+HCAPTCHA_SECRET = os.environ.get("HCAPTCHA_SECRET", "")
+
+ADSENSE_CLIENT_ID = os.environ.get("ADSENSE_CLIENT_ID", "")

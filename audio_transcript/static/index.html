@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>audio-transcript</title>
+  {{ADSENSE_HEAD}}
   <style>
     :root {
       --bg: #ffffff;
@@ -223,10 +224,40 @@
     }
     .history-content p { margin: 0 0 0.9rem; }
     .history-content p:last-child { margin-bottom: 0; }
+
+    /* Ad slots */
+    .ad-slot { margin: 1.5rem 0; min-height: 90px; }
+    .ad-placeholder {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: var(--code-bg);
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--accent); text-decoration: underline; }
   </style>
 </head>
 <body>
   <h1>Transcrição de áudio</h1>
+
+  {{ADSENSE_SLOT_TOP}}
 
   <div id="drop" class="drop">
     Arraste um arquivo de áudio aqui ou clique para escolher.
@@ -271,6 +302,14 @@
     <h2>Trabalhos recentes (<span id="historyCount">0</span>)</h2>
     <ul id="historyList"></ul>
   </section>
+
+  {{ADSENSE_SLOT_BOTTOM}}
+
+  <footer>
+    <a href="/privacy">Privacidade</a>
+    <a href="/terms">Termos de uso</a>
+    <span>Transcrição 100% local · Áudios apagados após 7 dias</span>
+  </footer>
 
 <script>
 const STAGES = ["upload", "normalizing", "chunking", "transcribing", "assembling"];

@@ -1,0 +1,46 @@
+name: audio-transcript
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - PARAKEET_MODEL_DIR=/var/lib/audio-transcript/models/sherpa-onnx-parakeet-v3-int8
+      - AUDIO_TRANSCRIPT_DATA_DIR=/var/lib/audio-transcript/data
+      - AUDIO_TRANSCRIPT_HOST=0.0.0.0
+      - AUDIO_TRANSCRIPT_PORT=8000
+      - AUDIO_TRANSCRIPT_MAX_UPLOAD_BYTES=${AUDIO_TRANSCRIPT_MAX_UPLOAD_BYTES:-524288000}
+      - AUDIO_TRANSCRIPT_PARALLELISM=${AUDIO_TRANSCRIPT_PARALLELISM:-4}
+      - AUDIO_TRANSCRIPT_RETENTION_DAYS=${AUDIO_TRANSCRIPT_RETENTION_DAYS:-7}
+      - HCAPTCHA_SECRET=${HCAPTCHA_SECRET:-}
+      - HCAPTCHA_SITEKEY=${HCAPTCHA_SITEKEY:-}
+      - ADSENSE_CLIENT_ID=${ADSENSE_CLIENT_ID:-}
+    volumes:
+      - models:/var/lib/audio-transcript/models
+      - data:/var/lib/audio-transcript/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-internal}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  models:
+  data:
+  caddy_data:
+  caddy_config:

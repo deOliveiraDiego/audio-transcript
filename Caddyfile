@@ -1,0 +1,24 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    request_body {
+        max_size 500MB
+    }
+
+    encode gzip
+
+    log {
+        output stdout
+        format console
+    }
+
+    reverse_proxy app:8000 {
+        flush_interval -1
+        transport http {
+            read_timeout 30m
+            write_timeout 30m
+        }
+    }
+}

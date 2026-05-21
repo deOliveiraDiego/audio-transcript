@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from audio_transcript import config
+from audio_transcript.cleanup import run_periodic_cleanup
 from audio_transcript.job import JobState, JobStatus
 from audio_transcript.pipeline import run_pipeline
 from audio_transcript.transcriber import Transcriber
@@ -50,11 +51,54 @@ broker = JobBroker()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.transcriber = Transcriber.from_default_config()
-    yield
+    cleanup_task = asyncio.create_task(
+        run_periodic_cleanup(
+            uploads_dir=config.UPLOADS_DIR,
+            retention_days=config.RETENTION_DAYS,
+        )
+    )
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
 
 
 app = FastAPI(title="audio-transcript", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+def _ad_head() -> str:
+    if not config.ADSENSE_CLIENT_ID:
+        return ""
+    return (
+        f'<script async '
+        f'src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'
+        f'?client={config.ADSENSE_CLIENT_ID}" crossorigin="anonymous"></script>'
+    )
+
+
+def _ad_slot() -> str:
+    if not config.ADSENSE_CLIENT_ID:
+        return '<div class="ad-slot ad-placeholder">Espaço para anúncio</div>'
+    return (
+        '<div class="ad-slot">'
+        '<ins class="adsbygoogle" style="display:block" '
+        f'data-ad-client="{config.ADSENSE_CLIENT_ID}" '
+        'data-ad-format="auto" data-full-width-responsive="true"></ins>'
+        '<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>'
+        '</div>'
+    )
+
+
+def _render_template(path: Path) -> str:
+    html = path.read_text()
+    return (
+        html.replace("{{ADSENSE_HEAD}}", _ad_head())
+            .replace("{{ADSENSE_SLOT_TOP}}", _ad_slot())
+            .replace("{{ADSENSE_SLOT_BOTTOM}}", _ad_slot())
+            .replace("{{ADSENSE_CLIENT_ID}}", config.ADSENSE_CLIENT_ID)
+            .replace("{{HCAPTCHA_SITEKEY}}", config.HCAPTCHA_SITEKEY)
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -62,7 +106,17 @@ async def index() -> HTMLResponse:
     index_path = STATIC_DIR / "index.html"
     if not index_path.exists():
         return HTMLResponse("<h1>audio-transcript</h1><p>UI not built yet.</p>")
-    return HTMLResponse(index_path.read_text())
+    return HTMLResponse(_render_template(index_path))
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy() -> HTMLResponse:
+    return HTMLResponse((STATIC_DIR / "privacy.html").read_text())
+
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms() -> HTMLResponse:
+    return HTMLResponse((STATIC_DIR / "terms.html").read_text())
 
 
 @app.post("/upload")
