@@ -1,0 +1,49 @@
+name: audio-transcript
+
+# Variante de deploy para co-locar na VPS da daltonlab (que já roda
+# Caddy + CouchDB + Dozzle em /opt/daltonlab-infra).
+#
+# Diferenças para o docker-compose.yml padrão:
+#   - SEM Caddy: a VPS já tem um Caddy ocupando as portas 80/443. Aqui o
+#     container publica direto no host e o acesso é por IP:porta (HTTP puro).
+#   - Limites de CPU/RAM: a VPS é pequena (2 vCPU / 3.7 GB) e divide recursos
+#     com o CouchDB do Obsidian. Sem limite, a transcrição pode sufocar o sync.
+#   - PARALLELISM=2 (em vez de 4) pela mesma razão.
+#   - Dozzle pega este container automaticamente (lê o docker.sock do host),
+#     então ele aparece em https://dozzle.daltonlab.ai sem config extra.
+#
+# Uso na VPS:
+#   docker compose -f docker-compose.vps.yml up -d
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: audio-transcript
+    restart: unless-stopped
+    ports:
+      # Publica no host. Acesse por http://<IP_DA_VPS>:${AT_HOST_PORT}
+      - "${AT_HOST_PORT:-8080}:8000"
+    environment:
+      - PARAKEET_MODEL_DIR=/var/lib/audio-transcript/models/sherpa-onnx-parakeet-v3-int8
+      - AUDIO_TRANSCRIPT_DATA_DIR=/var/lib/audio-transcript/data
+      - AUDIO_TRANSCRIPT_HOST=0.0.0.0
+      - AUDIO_TRANSCRIPT_PORT=8000
+      - AUDIO_TRANSCRIPT_MAX_UPLOAD_BYTES=${AUDIO_TRANSCRIPT_MAX_UPLOAD_BYTES:-524288000}
+      - AUDIO_TRANSCRIPT_PARALLELISM=${AUDIO_TRANSCRIPT_PARALLELISM:-2}
+      - AUDIO_TRANSCRIPT_RETENTION_DAYS=${AUDIO_TRANSCRIPT_RETENTION_DAYS:-7}
+      - HCAPTCHA_SECRET=${HCAPTCHA_SECRET:-}
+      - HCAPTCHA_SITEKEY=${HCAPTCHA_SITEKEY:-}
+      - ADSENSE_CLIENT_ID=${ADSENSE_CLIENT_ID:-}
+    # Limites para não competir com o CouchDB do Obsidian na VPS pequena.
+    # Ajuste AT_MEM_LIMIT / AT_CPUS no .env se a VPS crescer.
+    mem_limit: ${AT_MEM_LIMIT:-2g}
+    cpus: ${AT_CPUS:-1.5}
+    volumes:
+      - models:/var/lib/audio-transcript/models
+      - data:/var/lib/audio-transcript/data
+
+volumes:
+  models:
+  data:
